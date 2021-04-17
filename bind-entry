@@ -1,0 +1,45 @@
+#!/bin/ash
+# ISC BIND Entry File
+
+echo $(date) - Starting ISC BIND
+
+if [ ! -e /data/named.conf ]; then
+    cp /etc/bind/named.conf.recursive /data/named.conf
+fi
+
+if [ ! -e /data/zones ]; then
+    mkdir /data/zones
+fi
+
+if [ ! -e /data/rndc ]; then
+    mkdir /data/rndc
+fi
+
+if [ ! -e /data/rndc/rndc.key ]; then
+    rndc-confgen | head -n 5 > /data/rndc/rndc.key
+fi
+
+/usr/sbin/named-checkconf /data/named.conf
+if [ $? -eq 0 ]; then
+    echo Configuration check successful.
+else
+    echo Configuration check failed. Startup aborted.
+    exit 1
+fi
+
+badZone = false
+for name in $(ls /data/zones); do 
+    named-checkzone $(cat /data/zones/$name | grep SOA | grep IN | grep "(" | awk '{print $1'}) /data/zones/$name
+    if [ $? -ne 0 ]; then 
+        echo Zone $name configuration error.
+        badZone = true
+    fi
+done
+if [ $badZone ]; then
+    echo There are errors in your zone configuration files.  Startup aborted.
+    exit 1
+fi
+
+/usr/sbin/named -c /data/named.conf -f -g
+
+exit 0
